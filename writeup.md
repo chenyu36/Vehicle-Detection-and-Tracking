@@ -21,14 +21,28 @@ The goals / steps of this project are the following:
 
 The code for this step is contained in the code cell #1 of the IPython notebook in `get_hot_features()` function.  
 
-I started by reading in all the `vehicle` and `non-vehicle` images and stored them in arrays `cars[]` and `notcars[]` (code cell #1, line 120 to line 148).  There are 8792 `vehicle` images and 8968 `non-vehicle` images for training and testing. Here is an example of images from the `vehicle` and `non-vehicle` classes:
+I started by reading in all the `vehicle` and `non-vehicle` images in different directories and stored them in arrays `cars[]` and `notcars[]` (code cell #1, line 120 to line 148).  There are 8792 `vehicle` images and 8968 `non-vehicle` images for training and testing. Here is an example of images from the `vehicle` and `non-vehicle` classes:
 
 ![Car VS Not-Car](./output_images/car_not_car.png)
 
 
 ####2. The final choice of HOG parameters.
 
-I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`). I settled on using the `YCrCb` color space, `ALL` color channels and HOG parameters of `orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`, as it consistently yields over 98 to 99% accuracy score with a 80/20 train-test split. (code cell #1, `train_test_split()` at line 218). The parameters are listed in code cell #1, line 159 to 163.
+I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`). I settled on using the `YCrCb` color space, `ALL` color channels and HOG parameters of `orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`, as it consistently yields over 99% accuracy score with a 80/20 train-test split. (code cell #1, `train_test_split()` at line 218). Also, the HOG features extracted from different channels of the YCrCb color space offer enough distinction from each other that it is worthwhile to extract features from `ALL` channels. This is demonstrated in the following HOG visualization with car/not-car images randomly picked from the training set. 
+
+![HOG Visualization  Car CH-0](./output_images/HOG_Visualization_Car_CH-0.png)
+
+![HOG Visualization  Car CH-1](./output_images/HOG_Visualization_Car_CH-1.png)
+
+![HOG Visualization  Car CH-2](./output_images/HOG_Visualization_Car_CH-2.png)
+
+![HOG Visualization  Not-Car CH-0](./output_images/HOG_Visualization_Not-Car_CH-0.png)
+
+![HOG Visualization  Not-Car CH-1](./output_images/HOG_Visualization_Not-Car_CH-1.png)
+
+![HOG Visualization  Not-Car CH-2](./output_images/HOG_Visualization_Not-Car_CH-2.png)
+
+The parameters are listed in code cell #1, line 159 to 163.
 
 ```
 color_space = 'YCrCb' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
@@ -39,26 +53,52 @@ hog_channel = 'ALL' # Can be 0, 1, 2, or "ALL"
 ```
 
 ####3. How I trained a classifier using the selected HOG features and the Color features
-In addition to the HOG feature, I also extracted 2 color features from the training data. First, the color histogram (code cell #1, line 96) and second, the spatial binning of color (code cell #1, line 92). Color histogram is useful as it can be used to identify unique color pattern in different regions with slightly different background in the image. The spatial binning of color is essentially a template matching technique, but with a lower resolution template as the relevant features can still be preserved at low resolution. Since both color features are not very robust, we augment them with HOG feature extraction.  Before the data was used for training, it was normalized using `StandardScaler()`(code cell #1, line 207) to avoid individual features or set of features dominating the response of the classifier. It was also randomly shuffled to avoid problems due to the ordering of the data. `random_state=rand_state` at code cell #1, line 218. After training the Linear SVM classifier, `LinearSVC()`, where the final accuracy score is greater than 99%, I stored the training results to a pickle file called `feature_vector_pickle_fullset.p`. The key results that were saved are `svc`, `X_scaler`, `color_space`, `orient`,`pixel_per_cell` and `cell_per_block` because they will be used later for finding the cars in the video frames.
+In addition to the HOG feature, I also extracted 2 color features from the training data. First, the color histogram (code cell #1, line 96) and second, the spatial binning of color (code cell #1, line 92). Color histogram is useful as it can be used to identify unique color pattern in different regions with slightly different background in the image. The spatial binning of color is essentially a template matching technique, but with a lower resolution template because the relevant features can still be preserved at low resolution. Since both color features are not very robust on their own, we augment them with HOG features to form the final feature vector.  Before the data was used for training, it was normalized using `StandardScaler()`(code cell #1, line 207) to avoid individual features or set of features dominating the response of the classifier. It was also randomly shuffled to avoid problems due to the ordering of the data. `random_state=rand_state` at code cell #1, line 218. After training the Linear SVM classifier, `LinearSVC()`, where the final accuracy score is greater than 99%, I stored the training results to a pickle file called `feature_vector_pickle_fullset.p`. The key results that were saved are `svc`, `X_scaler`, `color_space`, `orient`,`pixel_per_cell` and `cell_per_block` because they can be repeated used later for finding the cars in the video frames without going through the training process again.
 ###Sliding Window Search
 
-####1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
+####1. HOG sub-sampling window search and the searching strategy
 
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
+Applying the technique of HOG sub-sampling window search (function `find_cars()` at code cell #2, line 23) found in the Udacity lesson, I explored different window scales in different regions of the image. I was hoping to find an optimal scheme that divides the image to multiple, slightly overlapping regions, with greater window scales allocated for the regions closer to the bottom of the image. In theory, this scheme would require fewer search windows and thus less time to process. However, in my experience, I find the most consistent sliding window scheme is simply one region with a fixed window scale. It appears to generate many overlapping windows over the car objects using the 6 test images. I chose a high overlapping percentage `cells_per_step=1` because the denser the overlapping windows, the hotter the resulting heat map gets, which is easier to set a threshold to reject false positives. I also restricted the overall region for searching to `(ystart, ystop, xstart, xstop) = (400, 646, 442, 1280)` since we don't need to search above the horizon for cars and our car is driving on the left lane with no cars cutting in front of it. The obvious trade-off for this scheme is speed: there are 1343 sliding windows per frame, on the Mid 2014 15-inch Macbook Pro, this resulted only about 1.7-1.8 frames/sec processing speed, far below the real time processing speed, but I got basically no false positives.
 
-![alt text][image3]
 
-####2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
+####2. Show some examples of test images to demonstrate how your pipeline is working. 
 
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
+Ultimately I searched on 1 windows scale = 1.2 using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a good result.  Here are some example images using the HOG sub-sampling window search and heat map.
 
-![alt text][image4]
+![Car Positions V.S. Heat map Example 1](./output_images/car_positions_vs_heatmap0.png)
+
+![Car Positions V.S. Heat map Example 2](./output_images/car_positions_vs_heatmap1.png)
+
+![Car Positions V.S. Heat map Example 3](./output_images/car_positions_vs_heatmap2.png)
+
+![Car Positions V.S. Heat map Example 4](./output_images/car_positions_vs_heatmap3.png)
+
+![Car Positions V.S. Heat map Example 5](./output_images/car_positions_vs_heatmap4.png)
+
+![Car Positions V.S. Heat map Example 6](./output_images/car_positions_vs_heatmap5.png)
+
+Overall, here are some steps that were taken to attempt to optimize the performance of the classifier:
+
+* Experimenting with the number of windows by changing the scale.
+   For example, 1.2 is the scale in `region0 = (400, 646, 442, 1280, 1.2)`, code cell #4, line 2. In theory, the fewer the sliding windows, the faster the processing time.
+* Reducing the length of the feature vector by different combination of the following parameters, code cell #1, line 160-165. In general, the shorter the feature length, the quicker the features can be extracted for each frame.
+
+```
+orient = 8
+pix_per_cell = 8
+cell_per_block = 2
+hog_channel = 'ALL' # Can be 0, 1, 2, or "ALL"
+spatial_size = (32, 32)
+hist_bins = 32
+```
+* Dividing the image into multiple regions with different window scale; the closer the region is to the bottom of the frame, the larger the window scale. Unfortunately, even though this yields faster processing time, but it did not provide better car detection. Further more, the larger window scale did not seem to be effective in detecting cars emerging from the bottom of the frame.
+
+
 ---
 
 ### Video Implementation
 
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
+####1. Here's a link to my video result [Dropbox link](https://www.dropbox.com/s/kccs61la8hi5qxi/vehicle_detection_project_video.mp4?dl=0)
 
 
 ####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
