@@ -98,24 +98,48 @@ hist_bins = 32
 
 ### Video Implementation
 
-####1. Here's a link to my video result [Dropbox link](https://www.dropbox.com/s/kccs61la8hi5qxi/vehicle_detection_project_video.mp4?dl=0)
+####1. Here's a link to my finished project video [Dropbox link](https://www.dropbox.com/s/kccs61la8hi5qxi/vehicle_detection_project_video.mp4?dl=0)
 
 
-####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
+####2. How I used heat map and filter to reject false positives and integrated the heat map over the last N frames to create resulting bounding box 
 
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
+Step 1
+Using `find_cars()` function in code cell #6, line 17, I recorded the bounding box, `bbox_list`, of the positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` at code cell #6, line 33 to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  For each frame, these bounding boxes are stored in `centroid_list`
 
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
+Step 2
+To integrate heatmap over N frames where N is set to 11, instead of direct summation of heatmap, I appended the bounding boxes detected at each frame to `detected_window_list`. (code cell #6, line 37) Since there could be different number of bounding boxes detected for each frame, I flatten the list every 12 frames by calling `flatten = list(itertools.chain.from_iterable(detected_window_list))`(code cell #6, line 43) before applying threshold = 5 to create heatmap which is used to construct the resulting bounding boxes every 12 frames. Every 12 frames, the oldest frame is popped out the the `detected_window_list` to keep the data up-to-date. To drawing the final bounding boxes, a filter was used to reject small or odd sizes that are not representative of the car sizes near the bottom of the frame.
+Here's an example showing the heatmap from a series of frames of the test video, the bounding boxes then overlaid using the integrated heatmap over the last N frames of the video:
 
-### Here are six frames and their corresponding heatmaps:
 
-![alt text][image5]
+### Here are 11 frames and their corresponding heatmaps:
 
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
+![Bounding Boxes V.S. Heatmap frame 0](./output_images/HeatMapOfFrame0.png)
+
+![Bounding Boxes V.S. Heatmap frame 1](./output_images/HeatMapOfFrame1.png)
+
+![Bounding Boxes V.S. Heatmap frame 2](./output_images/HeatMapOfFrame2.png)
+
+![Bounding Boxes V.S. Heatmap frame 3](./output_images/HeatMapOfFrame3.png)
+
+![Bounding Boxes V.S. Heatmap frame 4](./output_images/HeatMapOfFrame4.png)
+
+![Bounding Boxes V.S. Heatmap frame 5](./output_images/HeatMapOfFrame5.png)
+
+![Bounding Boxes V.S. Heatmap frame 6](./output_images/HeatMapOfFrame6.png)
+
+![Bounding Boxes V.S. Heat map frame 7](./output_images/HeatMapOfFrame7.png)
+
+![Bounding Boxes V.S. Heatmap frame 8](./output_images/HeatMapOfFrame8.png)
+
+![Bounding Boxes V.S. Heatmap frame 9](./output_images/HeatMapOfFrame9.png)
+
+![Bounding Boxes V.S. Heatmap frame 10](./output_images/HeatMapOfFrame10.png)
+
+![Bounding Boxes V.S. Heatmap frame 11](./output_images/HeatMapOfFrame11.png)
 
 ### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
+
+![Resulting Bounding Boxes V.S. Integrated Heatmap ](./output_images/IntegratedHeatMapAtFrame12.png)
 
 
 
@@ -123,7 +147,11 @@ Here's an example result showing the heatmap from a series of frames of video, t
 
 ###Discussion
 
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
-
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
-
+####1. Problems / issues that I faced in my implementation of this project. 
+* First, using the project tips from Udacity lesson, I spent a significant amount of time to manually remove the similar images in a time sequence before applying them on the linear SVM. I was able to achieve high accuracy score over 99% this way, but in reality the detection of vehicle did not appear to be superior. Later, I simply used the full set of project data to train the classifier.
+* Second, the accuracy of the classifier seems to be less accurate in those frames where vehicle is either entering or exiting the frame at the bottom of the image. Typically, as the vehicle is entering the frame, it takes a second or so for the bounding box to appear. As the vehicle is exiting the frame from the bottom, the bounding box can sometimes disappear and reappear.
+* Third, in those frames where 2 vehicles overlap at similar y coordinates, the 2 bounding boxes would merge due to the fact that the heatmap is not separable.
+* Forth, I attempted to create a Vehicle class using the information from the Udacity Q&A session, but had a hard time using this class to reliably track and predict the location of the corresponding bounding box in the next frame. I settled on the solution of integrated heatmap over the last N frame to create the bounding boxes.
+* If I had more time, I would like to train a convolutional neural network (CNN) using the same project data set and compare the performance. I am especially interested in the consistency of the vehicle detection bounding boxes and the processing time.
+* If had more time to explore the HOG features, I would spend time to process the Udacity data or add other data set to see if the classifier can achieve better accuracy score and fewer false positives.
+* It was suggested that compiling an Open CV version with CUDA support  could speed up processing time. If I had more time, I would explore this option and compare the performance of the pipeline.
