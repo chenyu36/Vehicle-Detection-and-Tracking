@@ -19,3 +19,4 @@ CVS
 
 # videos
 *.mp4
+!vehicle_detection_project_video.mp4
